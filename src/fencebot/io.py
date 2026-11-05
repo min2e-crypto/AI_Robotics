@@ -42,7 +42,7 @@ class PoseSource(Protocol):
 
 
 class StaticBackend:
-    """움직이지 않는 자리 표시용 구현. S2 시뮬레이터가 대체한다."""
+    """움직이지 않는 자리 표시용 구현 (러너 단위 테스트용). 실행은 sim.SimBackend를 쓴다."""
 
     def __init__(self, poses: tuple[RobotState, ...] | list[RobotState]):
         self._poses = list(poses)
@@ -53,3 +53,15 @@ class StaticBackend:
 
     def read(self, t: float) -> list[RobotState]:
         return [replace(p, t=t) for p in self._poses]
+
+    def handle(self, event) -> None:
+        pass
+
+    def step(self, dt: float) -> None:
+        pass
+
+    def pop_events(self) -> list[dict]:
+        return []
+
+    def log_fields(self) -> dict:
+        return {}

@@ -29,3 +29,25 @@ def test_run_writes_log_that_replays(tmp_path):
 
     events = [r for r in records if r["type"] == "event"]
     assert [(e["t"], e["kind"]) for e in events] == [(e.t, e.kind) for e in sc.events]
+
+
+def test_sim_run_logs_truth_net_and_handles_events(tmp_path, capsys):
+    from fencebot.cli import main
+    from fencebot.sim import SimBackend
+
+    cfg = load_config()
+    sc = load_scenario(ROOT / "scenarios" / "lane2_basic.toml")
+    log_path = tmp_path / "sim.jsonl"
+    sim = SimBackend(cfg, seed=sc.seed)
+
+    records = run(sc, cfg, sim, log_path)
+
+    assert records[0]["version"] == 2
+    ticks = [r for r in records if r["type"] == "tick"]
+    assert ticks[-1]["t"] == sc.duration_s == sim.time
+    assert {"truth", "net"} <= ticks[0].keys()
+    assert ticks[0]["net"]["unwound_mm"] == sim.net_length()
+    assert sim._robots[4].comm_ok  # comm_loss → comm_restore 처리됨
+
+    main(["replay", str(log_path)])
+    assert "그물" in capsys.readouterr().out

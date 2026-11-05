@@ -10,10 +10,10 @@ import argparse
 from pathlib import Path
 
 from .config import load_config
-from .io import StaticBackend
 from .log import read_log
 from .runner import run
 from .scenario import load_scenario
+from .sim import SimBackend
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> None:
         sc = load_scenario(args.scenario)
         cfg = load_config(args.config)
         log_path = Path(args.log or f"logs/{sc.name}.jsonl")
-        records = run(sc, cfg, StaticBackend(cfg.standby), log_path)
+        records = run(sc, cfg, SimBackend(cfg, seed=sc.seed), log_path)
         print(f"{log_path} 저장 ({len(records)}줄)")
     else:
         replay(args.log)
@@ -45,7 +45,9 @@ def replay(path: str | Path) -> None:
             print(f"{rec['t']:7.2f}s  이벤트 {rec['kind']} {rec['data']}")
         else:
             poses = " ".join(f"{r['robot_id']}:({r['x']:.0f},{r['y']:.0f})" for r in rec["robots"])
-            print(f"{rec['t']:7.2f}s  {rec['phase']:<10} {poses}")
+            net = rec.get("net")
+            net_txt = f"  그물 {net['unwound_mm']:.0f}mm {net['reel']}" if net else ""
+            print(f"{rec['t']:7.2f}s  {rec['phase']:<10} {poses}{net_txt}")
 
 
 if __name__ == "__main__":

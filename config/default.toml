@@ -18,6 +18,15 @@ position_mm = 50          # 임시
 heading_rad = 0.087       # 임시 (약 5도)
 settle_s = 1.0            # 임시
 
+# 시뮬레이터 (S2). 카메라 값은 2-1 카메라 점검, 와치독 값은 펌웨어 확정 후 고침
+[sim]
+camera_latency_s = 0.1    # 임시
+pos_noise_mm = 5          # 임시. 위치 잡음 표준편차
+heading_noise_rad = 0.01  # 임시. 방향 잡음 표준편차
+occlusion_prob = 0.02     # 임시. 읽을 때마다 로봇별 가림 확률
+watchdog_hold_s = 0.3     # 임시. 명령이 끊겨도 마지막 명령을 유지하는 시간
+watchdog_stop_s = 1.0     # 임시. 최고 속도에서 감속 정지까지 걸리는 시간
+
 # 사고 형태별 여유 거리 (범위 전체에 더함). 법적 근거 없음, 시연 파라미터
 [margins]
 damaged = 300             # 임시

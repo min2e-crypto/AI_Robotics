@@ -35,6 +35,16 @@ class ArrivalConfig:
 
 
 @dataclass(frozen=True)
+class SimConfig:
+    camera_latency_s: float
+    pos_noise_mm: float
+    heading_noise_rad: float
+    occlusion_prob: float
+    watchdog_hold_s: float
+    watchdog_stop_s: float
+
+
+@dataclass(frozen=True)
 class PlacementConfig:
     upstream_margin_mm: float
     downstream_margin_mm: float
@@ -72,6 +82,7 @@ class Config:
     net: NetConfig
     robot: RobotConfig
     arrival: ArrivalConfig
+    sim: SimConfig
     margins: dict[str, float]
     placement: PlacementConfig
     road: RoadConfig
@@ -88,6 +99,7 @@ def load_config(path: str | Path | None = None) -> Config:
         net=NetConfig(**raw["net"]),
         robot=RobotConfig(**raw["robot"]),
         arrival=ArrivalConfig(**raw["arrival"]),
+        sim=SimConfig(**raw["sim"]),
         margins=dict(raw["margins"]),
         placement=PlacementConfig(**raw["placement"]),
         road=RoadConfig(
