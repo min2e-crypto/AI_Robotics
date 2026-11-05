@@ -1,0 +1,31 @@
+# 2차로 단일 사고, 정상 차량 1대. 도로 좌표 mm.
+name = "lane2_basic"
+seed = 0
+duration_s = 5.0
+dt_s = 0.1
+
+# 사고 범위. S7 전까지는 시나리오에서 직접 준다
+[zone]
+bbox = [4500, 150, 5700, 1050]
+lanes = ["lane2"]
+kind = "damaged"
+
+[[vehicles]]
+track_id = 1
+label = "damaged"
+bbox = [4800, 350, 5400, 850]
+
+[[vehicles]]
+track_id = 2
+label = "normal"
+bbox = [6500, 1450, 7100, 1950]
+
+[[events]]
+t = 2.0
+kind = "comm_loss"
+robot_id = 4
+
+[[events]]
+t = 3.0
+kind = "comm_restore"
+robot_id = 4

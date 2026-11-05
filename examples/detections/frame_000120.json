@@ -1,0 +1,18 @@
+{
+  "frame": 120,
+  "timestamp": 4.0,
+  "detections": [
+    {"cls": "car", "confidence": 0.93, "bbox_px": [812.0, 430.5, 960.0, 520.0], "track_id": 1},
+    {"cls": "car", "confidence": 0.88, "bbox_px": [1180.0, 300.0, 1320.0, 385.0], "track_id": 2},
+    {"cls": "smoke", "confidence": 0.61, "bbox_px": [830.0, 380.0, 940.0, 450.0]}
+  ],
+  "vehicle_states": [
+    {"track_id": 1, "label": "damaged", "scores": {"normal": 0.08, "damaged": 0.81, "overturned": 0.11}},
+    {"track_id": 2, "label": "normal", "scores": {"normal": 0.95, "damaged": 0.04, "overturned": 0.01}}
+  ],
+  "lanes_px": {
+    "shoulder_line": [[0.0, 700.0], [1920.0, 690.0]],
+    "lane_boundary": [[0.0, 470.0], [1920.0, 462.0]],
+    "center_line": [[0.0, 240.0], [1920.0, 235.0]]
+  }
+}

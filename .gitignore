@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# 시크릿·로컬 환경
+.env
+.env.*
+*.local.toml
+
+# 실행 산출물
+logs/
+*.log
+runs/
+
+# 3D 프린팅 산출물 (생성 스크립트로 다시 만들 수 있음)
+펜스로봇_STL/**/*.stl
+펜스로봇_STL/**/preview_*.png
