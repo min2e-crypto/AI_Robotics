@@ -93,7 +93,11 @@ class Config:
 
 def load_config(path: str | Path | None = None) -> Config:
     path = Path(path) if path else DEFAULT_PATH
-    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    return config_from_raw(tomllib.loads(path.read_text(encoding="utf-8")))
+
+
+def config_from_raw(raw: dict) -> Config:
+    """로그 헤더의 config로도 같은 Config를 만든다."""
     road = raw["road"]
     return Config(
         net=NetConfig(**raw["net"]),

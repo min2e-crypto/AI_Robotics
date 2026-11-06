@@ -95,6 +95,7 @@ class SimBackend:
     def step(self, dt: float) -> None:
         rc = self.cfg.robot
         lag = 1 - math.exp(-dt / rc.steer_delay_s)
+        t_next = round(self.time + dt, 9)  # 이벤트는 막힌 결과가 보이는 시각으로 기록
         for rid in self._order:
             r = self._robots[rid]
             if self.time - r.last_rx > self.cfg.sim.watchdog_hold_s + _EPS:
@@ -109,13 +110,13 @@ class SimBackend:
                 r.speed = 0.0
                 if rid not in self._blocked:
                     self._blocked.add(rid)
-                    self._events.append({"t": self.time, "kind": "net_limit",
+                    self._events.append({"t": t_next, "kind": "net_limit",
                                          "data": {"robot_id": rid, "reel": self._reel}})
             else:
                 self._blocked.discard(rid)
         if self._reel != "hold":
             self._unwound = self.net_length()  # 릴 장력으로 처짐 없이 팽팽
-        self.time = round(self.time + dt, 9)
+        self.time = t_next
         self._history.append((self.time, self.truth()))
         keep = self.time - self.cfg.sim.camera_latency_s - 1.0
         while len(self._history) > 1 and self._history[1][0] <= keep:

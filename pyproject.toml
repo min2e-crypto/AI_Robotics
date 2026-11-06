@@ -3,7 +3,9 @@ name = "fencebot"
 version = "0.1.0"
 description = "펜스 로봇 배치·시뮬레이션"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pygame-ce>=2.5.8",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]

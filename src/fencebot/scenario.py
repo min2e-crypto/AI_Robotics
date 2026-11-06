@@ -42,7 +42,11 @@ class Scenario:
 
 
 def load_scenario(path: str | Path) -> Scenario:
-    raw = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    return scenario_from_raw(tomllib.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def scenario_from_raw(raw: dict) -> Scenario:
+    """로그 헤더의 scenario로도 같은 Scenario를 만든다."""
     z = raw.get("zone")
     events = []
     for e in raw.get("events", []):
