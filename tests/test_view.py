@@ -56,6 +56,7 @@ def test_scene_contents(tmp_path, cfg, scenario):
     assert scene.slack == pytest.approx(scene.unwound - scene.net_length)
     assert scene.zone == scenario.zone.bbox
     assert [v[0] for v in scene.vehicles] == ["damaged", "normal"]
+    assert len(scene.targets) == 5 and scene.placement_failures == ()
 
 
 def test_link_status_follows_events():

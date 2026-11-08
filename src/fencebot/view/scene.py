@@ -6,8 +6,9 @@ import math
 from dataclasses import dataclass
 
 from ..config import Config, LaneLine, RoadConfig
+from ..placement import plan_placement
 from ..scenario import Scenario
-from ..types import BBox
+from ..types import BBox, Target
 
 FLASH_S = 1.0  # 백엔드 이벤트(net_limit 등)를 상태 표시줄에 강조하는 시간
 
@@ -38,6 +39,8 @@ class Scene:
     zone: BBox | None
     vehicles: tuple[tuple[str, BBox], ...]
     lines: tuple[LaneLine, ...]
+    targets: tuple[Target, ...]            # 배치 계산 결과 (검사 실패 시 빈 값)
+    placement_failures: tuple[str, ...]    # 실패한 검사 코드
 
     @property
     def slack(self) -> float:
@@ -77,6 +80,7 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
     pts = [(r.x, r.y) for r in robots]
     segments = tuple(math.dist(a, b) for a, b in zip(pts, pts[1:]))
     net = tick.get("net", {})
+    placement = plan_placement(scenario.zone, config) if scenario.zone else None
     return Scene(
         t=t, phase=tick["phase"], robots=robots, segments=segments,
         net_length=sum(segments), unwound=net.get("unwound_mm", sum(segments)),
@@ -85,6 +89,8 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
         zone=scenario.zone.bbox if scenario.zone else None,
         vehicles=tuple((v.label, v.bbox) for v in scenario.vehicles),
         lines=config.road.lines,
+        targets=placement.targets if placement else (),
+        placement_failures=tuple(f.code for f in placement.failures) if placement else (),
     )
 
 

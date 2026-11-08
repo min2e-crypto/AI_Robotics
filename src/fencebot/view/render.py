@@ -37,6 +37,7 @@ def render(surface: pygame.Surface, scene: Scene, tf: ScreenTransform, config: C
     surface.fill(BG)
     _road(surface, scene, tf, config)
     _zone_and_vehicles(surface, scene, tf)
+    _targets(surface, scene, tf, config)
     _net(surface, scene, tf, config)
     _robots(surface, scene, tf, config, selected)
     _hud(surface, scene, tf, config, font, extra)
@@ -61,6 +62,20 @@ def _zone_and_vehicles(surface, scene, tf):
         pygame.draw.rect(surface, VEHICLE.get(label, OFFLINE), _rect(tf, box))
     if scene.zone:
         pygame.draw.rect(surface, ZONE, _rect(tf, scene.zone), 2)
+
+
+def _targets(surface, scene, tf, config):
+    """목표 지점: 역할 색의 + 표시와 목표 방향 선."""
+    roles = {r.robot_id: r.role.value for r in config.robots}
+    arm = tf.length(config.robot.radius_mm) * 0.6
+    for t in scene.targets:
+        color = ROBOT[roles[t.robot_id]]
+        cx, cy = tf.to_px(t.x, t.y)
+        pygame.draw.line(surface, color, (cx - arm, cy), (cx + arm, cy), 2)
+        pygame.draw.line(surface, color, (cx, cy - arm), (cx, cy + arm), 2)
+        tip = tf.to_px(t.x + config.robot.radius_mm * 1.6 * math.cos(t.heading),
+                       t.y + config.robot.radius_mm * 1.6 * math.sin(t.heading))
+        pygame.draw.line(surface, color, (cx, cy), tip, 1)
 
 
 def _net(surface, scene, tf, config):
@@ -93,6 +108,10 @@ def _hud(surface, scene, tf, config, font, extra):
         f"net {scene.net_length:.0f} / unwound {scene.unwound:.0f} / max {config.net.length_mm:.0f} mm"
         f"   slack {scene.slack:.0f} mm   segments [{segs}] (max gap {config.net.max_gap_mm:.0f})",
     ]
+    if scene.placement_failures:
+        rows[0] += f"   placement FAIL: {', '.join(scene.placement_failures)}"
+    elif scene.targets:
+        rows[0] += "   placement OK (+ = target)"
     alerts = list(scene.flashes)
     if not scene.camera_ok:
         alerts.append("CAMERA LOST")
