@@ -6,11 +6,13 @@ import math
 from dataclasses import dataclass
 
 from ..config import Config, LaneLine, RoadConfig
-from ..placement import plan_placement
+from ..dubins import sample
+from ..planner import Deployment, plan_deployment
 from ..scenario import Scenario
 from ..types import BBox, Target
 
 FLASH_S = 1.0  # 백엔드 이벤트(net_limit 등)를 상태 표시줄에 강조하는 시간
+PATH_STEP_MM = 50  # 계획 경로를 그릴 때 샘플 간격
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,8 @@ class Scene:
     vehicles: tuple[tuple[str, BBox], ...]
     lines: tuple[LaneLine, ...]
     targets: tuple[Target, ...]            # 배치 계산 결과 (검사 실패 시 빈 값)
-    placement_failures: tuple[str, ...]    # 실패한 검사 코드
+    placement_failures: tuple[str, ...]    # 실패한 검사 코드 (경로 계획 실패는 path)
+    paths: tuple[tuple[int, tuple[tuple[float, float], ...]], ...]  # (robot_id, 계획 경로), 실행 순서
 
     @property
     def slack(self) -> float:
@@ -65,7 +68,16 @@ def link_status(records: list[dict], t: float) -> tuple[bool, frozenset[int], tu
     return camera_ok, frozenset(comm_down), tuple(flashes)
 
 
-def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scenario) -> Scene:
+def deployment_for(config: Config, scenario: Scenario) -> Deployment | None:
+    """대기 배치에서 출발하는 전개 계획. 화면은 매 프레임 다시 계산하지 않도록 한 번 구해 넘긴다."""
+    if not scenario.zone:
+        return None
+    return plan_deployment(scenario.zone, tuple(v.bbox for v in scenario.vehicles),
+                           config.standby, config)
+
+
+def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scenario,
+                deployment: Deployment | None = None) -> Scene:
     t = tick["t"]
     camera_ok, comm_down, flashes = link_status(records, t)
     roles = {r.robot_id: r.role.value for r in config.robots}
@@ -80,7 +92,7 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
     pts = [(r.x, r.y) for r in robots]
     segments = tuple(math.dist(a, b) for a, b in zip(pts, pts[1:]))
     net = tick.get("net", {})
-    placement = plan_placement(scenario.zone, config) if scenario.zone else None
+    plan = deployment or deployment_for(config, scenario)
     return Scene(
         t=t, phase=tick["phase"], robots=robots, segments=segments,
         net_length=sum(segments), unwound=net.get("unwound_mm", sum(segments)),
@@ -89,8 +101,10 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
         zone=scenario.zone.bbox if scenario.zone else None,
         vehicles=tuple((v.label, v.bbox) for v in scenario.vehicles),
         lines=config.road.lines,
-        targets=placement.targets if placement else (),
-        placement_failures=tuple(f.code for f in placement.failures) if placement else (),
+        targets=plan.targets if plan else (),
+        placement_failures=tuple(f.code for f in plan.failures) if plan else (),
+        paths=tuple((m.robot_id, tuple((x, y) for x, y, _ in sample(m.path, PATH_STEP_MM)))
+                    for m in plan.moves) if plan else (),
     )
 
 

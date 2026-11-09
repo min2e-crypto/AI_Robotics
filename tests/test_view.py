@@ -57,6 +57,7 @@ def test_scene_contents(tmp_path, cfg, scenario):
     assert scene.zone == scenario.zone.bbox
     assert [v[0] for v in scene.vehicles] == ["damaged", "normal"]
     assert len(scene.targets) == 5 and scene.placement_failures == ()
+    assert len(scene.paths) == 8  # 줄 세우기 3 + 전진 3 + 기둥1 + 보관
 
 
 def test_link_status_follows_events():

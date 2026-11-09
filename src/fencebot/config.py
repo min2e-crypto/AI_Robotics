@@ -51,6 +51,13 @@ class PlacementConfig:
 
 
 @dataclass(frozen=True)
+class PlanningConfig:
+    clearance_mm: float
+    step_mm: float
+    stage_gap_mm: float
+
+
+@dataclass(frozen=True)
 class LaneLine:
     name: str
     kind: str
@@ -85,6 +92,7 @@ class Config:
     sim: SimConfig
     margins: dict[str, float]
     placement: PlacementConfig
+    planning: PlanningConfig
     road: RoadConfig
     robots: tuple[RobotSpec, ...]
     standby: tuple[RobotState, ...]
@@ -106,6 +114,7 @@ def config_from_raw(raw: dict) -> Config:
         sim=SimConfig(**raw["sim"]),
         margins=dict(raw["margins"]),
         placement=PlacementConfig(**raw["placement"]),
+        planning=PlanningConfig(**raw["planning"]),
         road=RoadConfig(
             x_min_mm=road["x_min_mm"],
             x_max_mm=road["x_max_mm"],

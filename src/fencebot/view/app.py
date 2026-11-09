@@ -13,7 +13,7 @@ from ..scenario import Scenario, scenario_from_raw
 from ..sim import SimBackend
 from .control import ManualControl, Playback
 from .render import render, window_size
-from .scene import ScreenTransform, build_scene
+from .scene import ScreenTransform, build_scene, deployment_for
 
 WIDTH_PX = 1400
 FPS = 60
@@ -29,6 +29,7 @@ def run_manual(scenario: Scenario, config: Config, log_path: str | Path) -> None
     control = ManualControl(config)
     backend = SimBackend(config, seed=scenario.seed)
     clock = pygame.time.Clock()
+    plan = deployment_for(config, scenario)
     with LogWriter(log_path) as log:
         runner = Runner(scenario, config, backend, log)
         tick = runner.tick()
@@ -45,7 +46,7 @@ def run_manual(scenario: Scenario, config: Config, log_path: str | Path) -> None
                     backend.send(cmd)
                 tick = runner.tick()
                 acc -= scenario.dt_s
-            scene = build_scene(tick, log.records, config, scenario)
+            scene = build_scene(tick, log.records, config, scenario, plan)
             render(screen, scene, tf, config, font, control.selected, MANUAL_HELP)
             pygame.display.flip()
 
@@ -57,13 +58,14 @@ def run_view(log_path: str | Path) -> None:
     playback = Playback([r for r in records if r["type"] == "tick"])
     screen, font, tf = _open(config, f"fencebot view - {Path(log_path).name}")
     clock = pygame.time.Clock()
+    plan = deployment_for(config, scenario)
     while True:
         for key in _keys():
             if key == "escape":
                 return
             playback.press(key)
         playback.update(clock.tick(FPS) / 1000)
-        scene = build_scene(playback.current(), records, config, scenario)
+        scene = build_scene(playback.current(), records, config, scenario, plan)
         state = "paused" if playback.paused else f"x{playback.speed:g}"
         render(screen, scene, tf, config, font, None, f"[{state}]  {VIEW_HELP}")
         pygame.display.flip()

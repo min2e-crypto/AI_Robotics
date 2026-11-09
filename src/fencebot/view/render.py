@@ -37,6 +37,7 @@ def render(surface: pygame.Surface, scene: Scene, tf: ScreenTransform, config: C
     surface.fill(BG)
     _road(surface, scene, tf, config)
     _zone_and_vehicles(surface, scene, tf)
+    _paths(surface, scene, tf, config)
     _targets(surface, scene, tf, config)
     _net(surface, scene, tf, config)
     _robots(surface, scene, tf, config, selected)
@@ -62,6 +63,14 @@ def _zone_and_vehicles(surface, scene, tf):
         pygame.draw.rect(surface, VEHICLE.get(label, OFFLINE), _rect(tf, box))
     if scene.zone:
         pygame.draw.rect(surface, ZONE, _rect(tf, scene.zone), 2)
+
+
+def _paths(surface, scene, tf, config):
+    """전개 계획 경로: 역할 색을 어둡게 한 가는 선."""
+    roles = {r.robot_id: r.role.value for r in config.robots}
+    for rid, pts in scene.paths:
+        color = tuple(v // 2 for v in ROBOT[roles[rid]])
+        pygame.draw.lines(surface, color, False, [tf.to_px(*p) for p in pts], 1)
 
 
 def _targets(surface, scene, tf, config):
@@ -111,7 +120,7 @@ def _hud(surface, scene, tf, config, font, extra):
     if scene.placement_failures:
         rows[0] += f"   placement FAIL: {', '.join(scene.placement_failures)}"
     elif scene.targets:
-        rows[0] += "   placement OK (+ = target)"
+        rows[0] += "   placement OK (+ = target, thin line = planned path)"
     alerts = list(scene.flashes)
     if not scene.camera_ok:
         alerts.append("CAMERA LOST")

@@ -37,7 +37,7 @@ def test_basic_lane2_targets(cfg):
     assert t[Role.PULLER].heading == 0 and t[Role.POST3].heading == 0
     assert t[Role.POST1].heading == pytest.approx(TAPER)
     assert t[Role.POST2].heading == pytest.approx(TAPER / 2)
-    assert t[Role.RESERVE].heading == pytest.approx(TAPER + math.pi / 2)
+    assert t[Role.RESERVE].heading == pytest.approx(TAPER - math.pi / 2)
 
 
 def test_targets_follow_zone_position(cfg):

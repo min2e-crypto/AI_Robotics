@@ -41,9 +41,10 @@ def plan_placement(zone: Zone, config: Config) -> Placement:
     reserve = (post2[0] - config.net.taper_length_mm, shoulder_y)
     post1 = _mid(reserve, post2)
     taper = math.atan2(post2[1] - reserve[1], post2[0] - reserve[0])
-    # 기둥 로봇은 그물 방향(하류 쪽), 기둥2는 꺾이는 곳이라 양쪽 방향의 가운데, 보관 로봇은 그물과 직각
+    # 기둥 로봇은 그물 방향(하류 쪽), 기둥2는 꺾이는 곳이라 양쪽 방향의 가운데,
+    # 보관 로봇은 그물과 직각인 갓길 쪽 (도로 쪽은 대기 배치에서 갈 경로가 없음, ADR-010)
     poses = {
-        Role.RESERVE: (*reserve, taper + math.pi / 2),
+        Role.RESERVE: (*reserve, taper - math.pi / 2),
         Role.POST1: (*post1, taper),
         Role.POST2: (*post2, taper / 2),
         Role.POST3: (*post3, 0.0),
