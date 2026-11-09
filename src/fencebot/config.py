@@ -16,6 +16,7 @@ class NetConfig:
     length_mm: float
     max_gap_mm: float
     taper_length_mm: float
+    hook_tol_mm: float
 
 
 @dataclass(frozen=True)

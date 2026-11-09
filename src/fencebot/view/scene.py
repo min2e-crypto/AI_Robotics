@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from ..config import Config, LaneLine, RoadConfig
 from ..dubins import sample
+from ..net import chain
 from ..planner import Deployment, plan_deployment
 from ..scenario import Scenario
 from ..types import BBox, Target
@@ -31,7 +32,8 @@ class Scene:
     t: float
     phase: str
     robots: tuple[RobotView, ...]  # 그물에 꿰인 순서
-    segments: tuple[float, ...]    # 보관→기둥1, 기둥1→2, 2→3, 3→당김
+    net_chain: tuple[int, ...]     # 그물이 지나는 로봇: 보관 → 걸린 기둥 → 당김 (ADR-011)
+    segments: tuple[float, ...]    # net_chain 구간 길이
     net_length: float
     unwound: float
     reel: str
@@ -63,8 +65,8 @@ def link_status(records: list[dict], t: float) -> tuple[bool, frozenset[int], tu
         elif kind in ("comm_loss", "comm_restore"):
             ids = {data["robot_id"]} if "robot_id" in data else {-1}
             comm_down = comm_down | ids if kind == "comm_loss" else comm_down - ids
-        elif kind == "net_limit" and t - e["t"] < FLASH_S:
-            flashes.append(f"net_limit {data['robot_id']}")
+        elif kind in ("net_limit", "net_hook", "net_tangle") and t - e["t"] < FLASH_S:
+            flashes.append(f"{kind} {data['robot_id']}")
     return camera_ok, frozenset(comm_down), tuple(flashes)
 
 
@@ -89,12 +91,15 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
                   p["robot_id"] not in comm_down and -1 not in comm_down)
         for p in truth
     )
-    pts = [(r.x, r.y) for r in robots]
-    segments = tuple(math.dist(a, b) for a, b in zip(pts, pts[1:]))
     net = tick.get("net", {})
+    order = [r.robot_id for r in config.robots]
+    hooked = set(net.get("hooked", order[1:-1]))  # v2 로그는 모든 기둥이 꿰인 모델
+    ids = tuple(chain(order, hooked))
+    pos = {r.robot_id: (r.x, r.y) for r in robots}
+    segments = tuple(math.dist(pos[a], pos[b]) for a, b in zip(ids, ids[1:]))
     plan = deployment or deployment_for(config, scenario)
     return Scene(
-        t=t, phase=tick["phase"], robots=robots, segments=segments,
+        t=t, phase=tick["phase"], robots=robots, net_chain=ids, segments=segments,
         net_length=sum(segments), unwound=net.get("unwound_mm", sum(segments)),
         reel=net.get("reel", "-"), clamp=net.get("clamp", "-"),
         camera_ok=camera_ok, flashes=flashes,

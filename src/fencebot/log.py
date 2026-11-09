@@ -6,7 +6,8 @@
 - tick:   {"type", "t", "phase", "robots": [RobotState dict, ...]}
           robots는 관제 쪽이 아는 위치(카메라 추정값). 시뮬레이터는 아래를 더한다 (v2)
           "truth": [{"robot_id", "x", "y", "heading"}, ...]
-          "net": {"length_mm", "unwound_mm", "reel", "clamp"}
+          "net": {"length_mm", "unwound_mm", "reel", "clamp", "hooked"}
+          hooked는 그물에 걸린 기둥 로봇 id (v3, ADR-011). v2 로그는 모든 기둥이 걸린 것으로 읽는다
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-LOG_VERSION = 2
+LOG_VERSION = 3
 
 
 class LogWriter:

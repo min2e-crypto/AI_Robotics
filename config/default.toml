@@ -2,9 +2,10 @@
 # "# 임시"가 붙은 값은 하드웨어 담당자 확인 전 값이다 (ADR-004).
 
 [net]
-length_mm = 7000          # 임시. 조립설명서는 6m. 전개 중간 자세(약 6.2m)를 위해 늘릴 수 있다고 가정 (ADR-010)
+length_mm = 6000          # 그물 전체 길이 (조립설명서, 실제 현장의 1/3 축척으로 확정 ADR-012)
 max_gap_mm = 1500         # 기둥 간 최대 간격
 taper_length_mm = 2600    # 임시. 보관 → 기둥2 진행 방향 거리. 대각 구간이 3m를 넘지 않게 정함
+hook_tol_mm = 30          # 임시. 기둥 로봇이 그물선에 이만큼 다가가면 링 클립에 걸린다고 봄 (ADR-011)
 
 [robot]
 wheelbase_mm = 280
@@ -76,29 +77,31 @@ role = "post3"
 robot_id = 4
 role = "puller"
 
-# 대기 배치. 전부 임시: 갓길 상류에 진행 방향으로 한 줄 (당김 로봇이 맨 앞)
+# 대기 배치. 전부 임시: 갓길 두 줄 (ADR-011)
+# 안쪽 줄(y -250)에 보관·당김이 서고 그 사이로 그물이 지난다. 기둥 3대는 바깥 줄(y -760)에서 그물과 떨어져 대기.
+# 기둥은 그물에 꿰여 있지 않아 줄 순서가 자유롭다
 [[standby]]
 robot_id = 0
 x = 400
-y = -500
+y = -250
 heading = 0.0
 [[standby]]
 robot_id = 1
 x = 900
-y = -500
+y = -760
 heading = 0.0
 [[standby]]
 robot_id = 2
 x = 1400
-y = -500
+y = -760
 heading = 0.0
 [[standby]]
 robot_id = 3
 x = 1900
-y = -500
+y = -760
 heading = 0.0
 [[standby]]
 robot_id = 4
 x = 2400
-y = -500
+y = -250
 heading = 0.0

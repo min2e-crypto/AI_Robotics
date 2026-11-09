@@ -43,10 +43,11 @@ def test_basic_scenario_deploys(cfg, scenario):
     assert d.ok, d.failures
     rid = ids(cfg)
     order = [m.robot_id for m in d.moves]
-    # 경계선 위 줄 세우기 → 앞에서부터 전진 → 기둥1 → 보관
-    assert order == [rid[Role.PULLER], rid[Role.POST3], rid[Role.POST2],
-                     rid[Role.PULLER], rid[Role.POST3], rid[Role.POST2],
-                     rid[Role.POST1], rid[Role.RESERVE]]
+    # 당김이 먼저 그물을 펴고 → 기둥3·2가 들어오며 걸고 줄 섬 → 보관 → 앞에서부터 전진 → 기둥1이 걸어 테이퍼
+    assert order == [rid[Role.PULLER], rid[Role.POST3], rid[Role.POST2], rid[Role.RESERVE],
+                     rid[Role.PULLER], rid[Role.POST3], rid[Role.POST2], rid[Role.POST1]]
+    assert [m.hooks for m in d.moves] == [(), (rid[Role.POST3],), (rid[Role.POST2],),
+                                          (), (), (), (), (rid[Role.POST1],)]
     final = {m.robot_id: m.goal for m in d.moves}
     assert {t.robot_id: (t.x, t.y, t.heading) for t in d.targets} == final
     for m in d.moves:
@@ -67,7 +68,8 @@ def test_moves_stay_out_of_zone_and_road(cfg, scenario):
 def test_direct_puller_move_drags_net_over_zone(cfg, scenario):
     """계획 원안처럼 당김 로봇을 대기 배치에서 바로 목표로 보내면 그물이 사고 범위 위를 지난다."""
     rid = ids(cfg)[Role.PULLER]
-    path, reason = plan_move(rid, (6000, BOUNDARY, 0.0), poses_of(cfg.standby), world_of(scenario), cfg)
+    path, reason, _ = plan_move(rid, (6000, BOUNDARY, 0.0), poses_of(cfg.standby), set(),
+                                world_of(scenario), cfg)
     assert path is None and "zone" in reason
 
 
@@ -82,8 +84,8 @@ def test_vehicle_blocks_path(cfg, scenario):
 def test_robot_collision_is_detected(cfg, scenario):
     poses = poses_of(cfg.standby)
     rid = ids(cfg)
-    poses[rid[Role.PULLER]] = (3000, -500, 0.0)  # 기둥3 바로 앞을 막음
-    path, reason = plan_move(rid[Role.POST3], (3500, -500, 0.0), poses, World(None, ()), cfg)
+    poses[rid[Role.PULLER]] = (2700, -760, 0.0)  # 기둥3 바로 앞을 막음
+    path, reason, _ = plan_move(rid[Role.POST3], (3500, -760, 0.0), poses, set(), World(None, ()), cfg)
     assert path is None and "robot" in reason
 
 
@@ -95,12 +97,26 @@ def test_crossing_other_net_segment_is_detected(cfg):
     poses[rid[Role.POST2]] = (500, 500, 0.0)  # 기둥2~3 구간이 도로를 가로로 막음
     poses[rid[Role.POST3]] = (8500, 500, 0.0)
     poses[rid[Role.PULLER]] = (8500, 1500, 0.0)
-    path, reason = plan_move(rid[Role.RESERVE], (4000, 1500, 0.0), poses, World(None, ()), long_net)
+    hooked = {rid[Role.POST2], rid[Role.POST3]}
+    path, reason, _ = plan_move(rid[Role.RESERVE], (4000, 1500, 0.0), poses, hooked, World(None, ()),
+                                long_net)
     assert path is None and "net_cross" in reason
 
 
+def test_hooking_wrong_segment_is_tangle(cfg):
+    rid = ids(cfg)
+    poses = poses_of(cfg.standby)
+    poses[rid[Role.POST3]] = (3000, 800, 0.0)    # 기둥3만 걸림: 보관-기둥3, 기둥3-당김 구간
+    poses[rid[Role.PULLER]] = (6000, -250, 0.0)
+    poses[rid[Role.POST2]] = (8500, -760, 0.0)   # 길을 비켜 둠
+    # 기둥1이 기둥3-당김 구간을 가로지르면 순서가 틀린 걸림
+    path, reason, _ = plan_move(rid[Role.POST1], (4500, 600, 0.0), poses, {rid[Role.POST3]},
+                                World(None, ()), cfg)
+    assert path is None and "net_tangle" in reason
+
+
 def test_net_length_limit_applies_during_deployment(cfg, scenario):
-    short = replace(cfg, net=replace(cfg.net, length_mm=6000))  # 최종 4650은 통과하지만 중간 자세가 넘음
+    short = replace(cfg, net=replace(cfg.net, length_mm=5700))  # 최종 5610은 통과하지만 전진 중(약 5.78m)에 넘음
     d = plan_deployment(scenario.zone, vehicles_of(scenario), short.standby, short)
     assert {f.code for f in d.failures} == {"path"}
     assert "net_length" in d.failures[0].detail

@@ -51,13 +51,22 @@ def test_scene_contents(tmp_path, cfg, scenario):
         runner = Runner(scenario, cfg, SimBackend(cfg), log)
         scene = build_scene(runner.tick(), log.records, cfg, scenario)
     assert [r.role for r in scene.robots] == [r.role.value for r in cfg.robots]
-    assert len(scene.segments) == 4
+    assert scene.net_chain == (0, 4)  # 기둥은 그물과 떨어져 출발 (ADR-011)
+    assert len(scene.segments) == 1
     assert sum(scene.segments) == pytest.approx(scene.net_length)
     assert scene.slack == pytest.approx(scene.unwound - scene.net_length)
     assert scene.zone == scenario.zone.bbox
     assert [v[0] for v in scene.vehicles] == ["damaged", "normal"]
     assert len(scene.targets) == 5 and scene.placement_failures == ()
-    assert len(scene.paths) == 8  # 줄 세우기 3 + 전진 3 + 기둥1 + 보관
+    assert len(scene.paths) == 8  # 줄 세우기 3 + 전진 3 + 보관 + 기둥1
+
+
+def test_v2_log_without_hooked_draws_all_posts_on_net(tmp_path, cfg, scenario):
+    with LogWriter(tmp_path / "run.jsonl") as log:
+        tick = Runner(scenario, cfg, SimBackend(cfg), log).tick()
+    del tick["net"]["hooked"]
+    scene = build_scene(tick, log.records, cfg, scenario)
+    assert scene.net_chain == (0, 1, 2, 3, 4) and len(scene.segments) == 4
 
 
 def test_link_status_follows_events():

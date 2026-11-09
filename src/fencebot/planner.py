@@ -1,9 +1,11 @@
-"""전개 경로 계획 (배치_시뮬레이션_계획 4-1·4-2, ADR-010).
+"""전개 경로 계획 (배치_시뮬레이션_계획 4-1·4-2, ADR-010·011).
 
 한 번에 한 대씩 움직이고, 나머지는 그 자리에 서 있다고 본다. 움직이는 로봇의 경로를 샘플마다 검사한다.
 - 장애물 지도: 도로 밖(반지름만큼 안쪽까지), 사고 범위(부풀리지 않음, 중심만 금지),
   차량(반지름 + 여유), 다른 로봇(반지름 2배 + 여유)
-- 그물: 전체 길이, 사고 범위·차량 위를 지나는 구간, 몸체가 다른 구간에 닿거나 자기 구간이 다른 로봇에 닿는 경우
+- 그물(보관 → 걸린 기둥 → 당김, net.py): 전체 길이, 사고 범위·차량 위를 지나는 구간,
+  걸린 로봇의 몸체가 다른 구간에 닿거나 자기 구간이 걸린 다른 로봇에 닿는 경우,
+  기둥이 순서가 틀린 구간에 걸리는 경우(꼬임). 걸리지 않은 기둥은 그물 아래로 지나간다.
 경로는 전진 Dubins이며, 가장 짧은 것부터 시험해 처음 통과하는 것을 쓴다.
 """
 
@@ -14,6 +16,7 @@ from dataclasses import dataclass
 
 from .config import Config
 from .dubins import DubinsPath, Pose, dubins_paths, sample
+from .net import chain, hook_events
 from .placement import Failure, plan_placement
 from .types import BBox, Role, RobotState, Target, Zone
 
@@ -29,6 +32,7 @@ class Move:
     robot_id: int
     goal: Pose
     path: DubinsPath
+    hooks: tuple[int, ...] = ()  # 이 이동 중 그물에 걸리는 기둥 로봇
 
 
 @dataclass(frozen=True)
@@ -50,21 +54,29 @@ def plan_deployment(zone: Zone, vehicles: tuple[BBox, ...], start: tuple[RobotSt
     world = World(zone.bbox, tuple(vehicles))
     roles = {r.robot_id: r.role.value for r in config.robots}
     poses = {s.robot_id: (s.x, s.y, s.heading) for s in start}
+    hooked: set[int] = set()  # 기둥 로봇은 그물과 떨어져 출발한다 (ADR-011)
     moves = []
     for rid, goal in _sequence(placement.targets, config):
-        path, reason = plan_move(rid, goal, poses, world, config)
+        path, reason, hooks = plan_move(rid, goal, poses, hooked, world, config)
         if path is None:
             detail = f"{roles[rid]} -> ({goal[0]:.0f}, {goal[1]:.0f}): {reason}"
             return Deployment((), (), (Failure("path", detail),))
-        moves.append(Move(rid, goal, path))
+        moves.append(Move(rid, goal, path, hooks))
         poses[rid] = goal
+        hooked |= set(hooks)
+    loose = [roles[r.robot_id] for r in config.robots[1:-1] if r.robot_id not in hooked]
+    if loose:
+        return Deployment((), (), (Failure("path", f"not hooked: {', '.join(loose)}"),))
     return Deployment(placement.targets, tuple(moves), ())
 
 
 def _sequence(targets: tuple[Target, ...], config: Config) -> list[tuple[int, Pose]]:
-    """경계선 위 기둥2 목표에서 상류로 당김·기둥3·기둥2를 줄 세운 뒤 앞에서부터 전진한다.
+    """당김이 경계선 위 기둥2 목표까지 그물을 펴면, 기둥3·기둥2가 들어오며 그물을 걸고 그 뒤에 줄 선다.
+    보관 로봇이 자리를 잡은 뒤 앞에서부터 목표까지 전진하고, 마지막으로 기둥1이 들어와 걸어 테이퍼를 만든다.
 
-    한 대씩 바로 목표로 보내면 그물이 사고 범위를 가로지르기 때문이다 (ADR-010).
+    당김이 한 번에 목표까지 가면 보관-당김 그물선이 사고 범위를 지나기 때문이다 (ADR-010·011).
+    보관 로봇을 전진 전에 보내야 그물 6m 안에 든다 (ADR-012). 기둥1은 보관 로봇이 자리 잡은 뒤에 와야
+    목표에서 보관-기둥2 그물선에 닿아 걸린다.
     """
     rid = {r.role: r.robot_id for r in config.robots}
     t = {r.role: (tg.x, tg.y, tg.heading) for r in config.robots for tg in targets
@@ -73,26 +85,47 @@ def _sequence(targets: tuple[Target, ...], config: Config) -> list[tuple[int, Po
     gap = config.planning.stage_gap_mm
     line = [Role.PULLER, Role.POST3, Role.POST2]
     stages = [(rid[role], (x0 - k * gap, yb, 0.0)) for k, role in enumerate(line)]
+    reserve = [(rid[Role.RESERVE], t[Role.RESERVE])]
     advance = [(rid[role], t[role]) for role in line]
-    rest = [(rid[role], t[role]) for role in (Role.POST1, Role.RESERVE)]
-    return stages + advance + rest
+    post1 = [(rid[Role.POST1], t[Role.POST1])]
+    return stages + reserve + advance + post1
 
 
-def plan_move(robot_id: int, goal: Pose, poses: dict[int, Pose], world: World,
-              config: Config) -> tuple[DubinsPath | None, str]:
-    """통과하는 경로와 빈 문자열, 또는 None과 가장 짧은 경로가 처음 걸린 이유."""
+def plan_move(robot_id: int, goal: Pose, poses: dict[int, Pose], hooked: set[int], world: World,
+              config: Config) -> tuple[DubinsPath | None, str, tuple[int, ...]]:
+    """(통과하는 경로, "", 이동 중 걸리는 기둥) 또는 (None, 가장 짧은 경로가 처음 걸린 이유, ())."""
     first_reason = "no_path"
     for i, path in enumerate(dubins_paths(poses[robot_id], goal, config.robot.min_turn_radius_mm)):
-        reason = next((v for p in sample(path, config.planning.step_mm)
-                       if (v := violation(robot_id, p, poses, world, config))), "")
+        reason, hooks = _follow(robot_id, sample(path, config.planning.step_mm), poses, hooked,
+                                world, config)
         if not reason:
-            return path, ""
+            return path, "", hooks
         if i == 0:
             first_reason = reason
-    return None, first_reason
+    return None, first_reason, ()
 
 
-def violation(robot_id: int, pose: Pose, poses: dict[int, Pose], world: World,
+def _follow(robot_id, pts, poses, hooked, world, config) -> tuple[str, tuple[int, ...]]:
+    """경로를 따라가며 걸리는 기둥을 반영해 검사한다. (어긴 조건, 걸린 기둥 순서)."""
+    order = [s.robot_id for s in config.robots]
+    roles = {s.robot_id: s.role.value for s in config.robots}
+    state, hooks = set(hooked), []
+    prev = {rid: p[:2] for rid, p in poses.items()}
+    for pose in pts:
+        now = dict(prev)
+        now[robot_id] = pose[:2]
+        for post, a, b, ok in hook_events(order, state, prev, now, config.net.hook_tol_mm):
+            if not ok:
+                return f"net_tangle ({roles[post]} into {roles[a]}-{roles[b]})", ()
+            state.add(post)
+            hooks.append(post)
+        if v := violation(robot_id, pose, poses, state, world, config):
+            return v, ()
+        prev = now
+    return "", tuple(hooks)
+
+
+def violation(robot_id: int, pose: Pose, poses: dict[int, Pose], hooked: set[int], world: World,
               config: Config) -> str:
     """robot_id가 pose에 있고 나머지는 poses에 있을 때 어긴 조건. 없으면 빈 문자열."""
     x, y = pose[0], pose[1]
@@ -113,7 +146,8 @@ def violation(robot_id: int, pose: Pose, poses: dict[int, Pose], world: World,
 
     order = [s.robot_id for s in config.robots]
     pts = {rid: (pose if rid == robot_id else poses[rid])[:2] for rid in order}
-    segs = [(a, b) for a, b in zip(order, order[1:])]
+    on_net = chain(order, hooked)
+    segs = list(zip(on_net, on_net[1:]))
     total = sum(math.dist(pts[a], pts[b]) for a, b in segs)
     if total > config.net.length_mm:
         return f"net_length {total:.0f} > {config.net.length_mm:.0f}"
@@ -123,10 +157,12 @@ def violation(robot_id: int, pose: Pose, poses: dict[int, Pose], world: World,
         for k, box in enumerate(world.vehicles):
             if _segment_hits_rect(pts[a], pts[b], box):
                 return f"net_over vehicle {k} ({roles[a]}-{roles[b]})"
+    if robot_id not in on_net:
+        return ""  # 걸리지 않은 기둥은 그물 아래로 지나간다 (선에 닿으면 _follow에서 걸림)
     for a, b in segs:
         mine = robot_id in (a, b)
-        # 내 구간은 다른 로봇에, 남의 구간은 내 몸체에 닿으면 안 된다
-        others = [rid for rid in order if rid not in (a, b)] if mine else [robot_id]
+        # 내 구간은 걸린 다른 로봇에, 남의 구간은 내 몸체에 닿으면 안 된다
+        others = [rid for rid in on_net if rid not in (a, b)] if mine else [robot_id]
         for rid in others:
             if _dist_segment(pts[rid], pts[a], pts[b]) < r:
                 return f"net_cross ({roles[a]}-{roles[b]}, {roles[rid]})"

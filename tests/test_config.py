@@ -4,7 +4,7 @@ from fencebot.types import Role
 
 def test_default_config_loads_required_values():
     cfg = load_config()
-    assert cfg.net.length_mm == 7000  # 임시 (ADR-010)
+    assert cfg.net.length_mm == 6000
     assert cfg.net.max_gap_mm == 1500
     assert cfg.robot.min_turn_radius_mm == 590
     assert cfg.robot.wheelbase_mm == 280

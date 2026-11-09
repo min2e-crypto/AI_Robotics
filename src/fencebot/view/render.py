@@ -89,9 +89,11 @@ def _targets(surface, scene, tf, config):
 
 def _net(surface, scene, tf, config):
     near_limit = scene.net_length > config.net.length_mm * NET_NEAR_LIMIT
-    pts = [tf.to_px(r.x, r.y) for r in scene.robots]
+    pos = {r.robot_id: tf.to_px(r.x, r.y) for r in scene.robots}
+    pts = [pos[rid] for rid in scene.net_chain]
+    all_hooked = len(scene.net_chain) == len(scene.robots)  # 간격 한도는 기둥이 모두 걸린 배치에만 적용
     for a, b, seg in zip(pts, pts[1:], scene.segments):
-        bad = near_limit or seg > config.net.max_gap_mm
+        bad = near_limit or (all_hooked and seg > config.net.max_gap_mm)
         pygame.draw.line(surface, NET_BAD if bad else NET_OK, a, b, 2)
 
 

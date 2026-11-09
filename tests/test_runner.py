@@ -42,7 +42,7 @@ def test_sim_run_logs_truth_net_and_handles_events(tmp_path, capsys):
 
     records = run(sc, cfg, sim, log_path)
 
-    assert records[0]["version"] == 2
+    assert records[0]["version"] == 3
     ticks = [r for r in records if r["type"] == "tick"]
     assert ticks[-1]["t"] == sc.duration_s == sim.time
     assert {"truth", "net"} <= ticks[0].keys()

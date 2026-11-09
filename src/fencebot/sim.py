@@ -2,8 +2,9 @@
 
 모델 (배치_시뮬레이션_계획 5절, ADR-007)
 - 차체: 자전거 모델. 위치 기준점은 뒷바퀴 축 가운데. 조향은 1차 지연, 속도는 명령 즉시 반영.
-- 그물: 보관 → 기둥1·2·3 → 당김 꺾은선 길이. 릴이 장력을 유지한다고 보고, 길이 제약을 어기는
-  로봇 이동은 그 스텝만 막는다(다른 로봇을 끌지 않음).
+- 그물: 보관 → 걸린 기둥들 → 당김 꺾은선 길이. 기둥은 처음에 떨어져 있다가 그물선을 지나면 걸린다
+  (net.py, ADR-011). 릴이 장력을 유지한다고 보고, 길이 제약을 어기는 로봇 이동은 그 스텝만 막는다
+  (다른 로봇을 끌지 않음).
 - 카메라: 지연·잡음·가림. 가려진 로봇과 카메라 끊김 중에는 마지막으로 본 위치(옛 t)를 돌려준다.
 - 와치독: 마지막 명령 수신 후 watchdog_hold_s까지 유지, 이후 감속 정지.
 """
@@ -15,6 +16,7 @@ import random
 
 from .config import Config
 from .io import ActionCommand, Command, DriveCommand
+from .net import hook_events, net_length
 from .scenario import Event
 from .types import RobotState
 
@@ -43,6 +45,8 @@ class SimBackend:
         self._decel = config.robot.max_speed_mm_s / config.sim.watchdog_stop_s
         self._reel = "unwind"
         self._clamp = "closed"
+        self._hooked: set[int] = set()  # 그물에 걸린 기둥 로봇
+        self._tangled: set[int] = set()
         self._unwound = self.net_length()
         self._blocked: set[int] = set()
         self._events: list[dict] = []
@@ -96,6 +100,7 @@ class SimBackend:
         rc = self.cfg.robot
         lag = 1 - math.exp(-dt / rc.steer_delay_s)
         t_next = round(self.time + dt, 9)  # 이벤트는 막힌 결과가 보이는 시각으로 기록
+        before = self._points()
         for rid in self._order:
             r = self._robots[rid]
             if self.time - r.last_rx > self.cfg.sim.watchdog_hold_s + _EPS:
@@ -114,6 +119,7 @@ class SimBackend:
                                          "data": {"robot_id": rid, "reel": self._reel}})
             else:
                 self._blocked.discard(rid)
+        self._hook(before, t_next)
         if self._reel != "hold":
             self._unwound = self.net_length()  # 릴 장력으로 처짐 없이 팽팽
         self.time = t_next
@@ -132,8 +138,10 @@ class SimBackend:
                            self._robots[rid].heading, self.time) for rid in self._order]
 
     def net_length(self) -> float:
-        pts = [(self._robots[rid].x, self._robots[rid].y) for rid in self._order]
-        return sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+        return net_length(self._order, self._hooked, self._points())
+
+    def hooked(self) -> set[int]:
+        return set(self._hooked)
 
     def unwound_mm(self) -> float:
         return self._unwound
@@ -149,8 +157,24 @@ class SimBackend:
             "truth": [{"robot_id": p.robot_id, "x": p.x, "y": p.y, "heading": p.heading}
                       for p in self.truth()],
             "net": {"length_mm": self.net_length(), "unwound_mm": self._unwound,
-                    "reel": self._reel, "clamp": self._clamp},
+                    "reel": self._reel, "clamp": self._clamp,
+                    "hooked": [rid for rid in self._order if rid in self._hooked]},
         }
+
+    def _points(self) -> dict[int, tuple[float, float]]:
+        return {rid: (r.x, r.y) for rid, r in self._robots.items()}
+
+    def _hook(self, before: dict, t: float) -> None:
+        for post, a, b, ok in hook_events(self._order, self._hooked, before, self._points(),
+                                          self.cfg.net.hook_tol_mm):
+            if ok:
+                self._hooked.add(post)
+            elif post in self._tangled:
+                continue
+            else:
+                self._tangled.add(post)  # 순서가 틀린 걸림은 표현할 수 없어 이벤트만 남긴다
+            self._events.append({"t": t, "kind": "net_hook" if ok else "net_tangle",
+                                 "data": {"robot_id": post, "between": [a, b]}})
 
     def _net_limit(self) -> float:
         # 풀기: 그물 전체 길이까지. 유지·감기: 지금 풀린 길이 이상으로 늘어나지 않음

@@ -192,3 +192,26 @@ def test_no_command_means_watchdog_stop_even_without_comm_loss():
     drive(sim, cfg.sim.watchdog_hold_s + cfg.sim.watchdog_stop_s + 0.1, [])
     assert sim.speed(PULLER) == 0
 
+
+
+def test_posts_start_detached_from_net():
+    sim = SimBackend(quiet_config())
+    assert sim.hooked() == set()
+    p = {r.robot_id: (r.x, r.y) for r in sim.truth()}
+    assert sim.net_length() == pytest.approx(math.dist(p[0], p[PULLER]))
+
+
+def test_post_hooks_when_crossing_net_line():
+    cfg = quiet_config()
+    sim = SimBackend(cfg)
+    post2 = 2
+    # 갓길 바깥 줄에서 왼쪽으로 돌며 보관-당김 그물선을 아래에서 위로 가로지른다
+    drive(sim, 3.0, [DriveCommand(post2, speed_mm_s=300, steer_rad=1.0)])
+    assert sim.hooked() == {post2}
+    events = sim.pop_events()
+    assert [e["kind"] for e in events] == ["net_hook"]
+    assert events[0]["data"] == {"robot_id": post2, "between": [0, PULLER]}
+    p = {r.robot_id: (r.x, r.y) for r in sim.truth()}
+    assert sim.net_length() == pytest.approx(math.dist(p[0], p[post2]) + math.dist(p[post2], p[PULLER]))
+    assert sim.log_fields()["net"]["hooked"] == [post2]
+
