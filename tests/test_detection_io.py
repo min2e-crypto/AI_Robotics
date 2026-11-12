@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from fencebot.config import load_config
 from fencebot.detection_io import load_frame, load_frames, load_vision_results, vision_frame
 from fencebot.incident import incident_from_frames
@@ -80,3 +82,35 @@ def test_vision_results_give_same_zone_as_frame_folder(tmp_path):
     write_jsonl(p, rows)
     a, b = incident_from_frames(load_frames(folder), cfg), incident_from_frames(load_frames(p), cfg)
     assert a.zone is not None and a.zone == b.zone and a.vehicles == b.vehicles
+
+
+def test_single_frame_is_held_as_still_photo(tmp_path):
+    p = tmp_path / "results.jsonl"
+    write_jsonl(p, [{**VISION_RESULT, "file": "a.jpg", "frame": 0}])
+    assert len(load_frames(p)) == 1
+    held = load_frames(p, hold=5)
+    assert len(held) == 5 and all(f == held[0] for f in held)
+
+
+def test_photo_selects_one_row_by_name_stem_or_index(tmp_path):
+    p = tmp_path / "results.jsonl"
+    rows = [{**VISION_RESULT, "file": f"{n}.jpg", "frame": 0, "fires": []} for n in ("a", "b", "c")]
+    rows[1]["fires"] = VISION_RESULT["fires"]
+    write_jsonl(p, rows)
+    assert len(load_frames(p, hold=5)) == 3  # 고르지 않으면 지금처럼 줄 순서대로
+    for photo in ("b.jpg", "b", "1"):
+        frames = load_frames(p, photo=photo, hold=5)
+        assert len(frames) == 5
+        assert any(d.cls == "fire" for d in frames[0].detections)
+    with pytest.raises(ValueError, match="a.jpg, b.jpg, c.jpg"):
+        load_frames(p, photo="x.jpg")
+    with pytest.raises(ValueError):
+        load_frames(tmp_path, photo="a.jpg")  # 프레임 폴더에서는 고를 수 없다
+
+
+def test_still_photo_confirms_zone(tmp_path):
+    cfg = load_config()
+    folder = ROOT / "examples" / "detections" / "lane2_basic"
+    one = load_frames(folder)[0]
+    assert incident_from_frames([one], cfg).zone is None
+    assert incident_from_frames([one] * cfg.incident.confirm_frames, cfg).zone is not None

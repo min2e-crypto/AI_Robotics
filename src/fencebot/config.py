@@ -121,8 +121,16 @@ class Config:
 
 
 def load_config(path: str | Path | None = None) -> Config:
-    path = Path(path) if path else DEFAULT_PATH
-    return config_from_raw(tomllib.loads(path.read_text(encoding="utf-8")))
+    """기본 설정 위에 path의 값을 덮어쓴다. path에는 바꿀 값만 있으면 된다 (예: 영상별 [camera]).
+
+    표([section])는 키 단위로 합치고, 그 밖의 값(lanes·robots 같은 목록 포함)은 통째로 바꾼다.
+    """
+    raw = tomllib.loads(DEFAULT_PATH.read_text(encoding="utf-8"))
+    if path:
+        for key, value in tomllib.loads(Path(path).read_text(encoding="utf-8")).items():
+            both_tables = isinstance(value, dict) and isinstance(raw.get(key), dict)
+            raw[key] = {**raw[key], **value} if both_tables else value
+    return config_from_raw(raw)
 
 
 def config_from_raw(raw: dict) -> Config:

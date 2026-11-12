@@ -230,11 +230,22 @@ def _panel(surface, fonts, config, state, stage, scene):
         row(f"{fonts.t('check')}: {what}", WARN)
 
 
-def image_files(directory: str | Path | None) -> list[Path]:
-    """영상 프레임 사진. 이름 순서가 Detection 프레임 순서와 같다고 본다 (vision.py의 runs/<name>/)."""
-    if not directory:
+def image_files(source: str | Path | None) -> list[Path]:
+    """영상 프레임 사진. 폴더면 이름 순서가 Detection 프레임 순서와 같다고 본다 (vision.py의 runs/<name>/).
+
+    사진 파일 하나를 주면 그것만 쓴다 (멈춘 사진).
+    """
+    if not source:
         return []
-    return sorted(p for p in Path(directory).iterdir() if p.suffix.lower() in IMAGE_EXT)
+    source = Path(source)
+    if source.is_file():
+        return [source]
+    return sorted(p for p in source.iterdir() if p.suffix.lower() in IMAGE_EXT)
+
+
+def image_index(frame_index: int, count: int) -> int | None:
+    """프레임 순번에 보여 줄 사진 순번. 사진이 프레임보다 적으면 마지막 사진을 계속 보여 준다."""
+    return min(frame_index, count - 1) if count else None
 
 
 def scene_for(state: ShowState, stage: str, tick: dict | None, records: list[dict], config: Config,
@@ -249,7 +260,7 @@ def scene_for(state: ShowState, stage: str, tick: dict | None, records: list[dic
 
 
 def run_present(scenario: Scenario, config: Config, backend: PlaybackBackend | None, plan, show: Show,
-                log_path: str | Path, images: str | Path | None = None, speed: float = 2.0,
+                log_path: str | Path, images: str | Path | list[Path] | None = None, speed: float = 2.0,
                 width: int = 1200) -> None:
     """발표 화면을 실시간으로 재생한다. 끝나도 esc를 누를 때까지 마지막 화면을 유지한다.
 
@@ -260,7 +271,7 @@ def run_present(scenario: Scenario, config: Config, backend: PlaybackBackend | N
     screen = pygame.display.set_mode(layout.size)
     pygame.display.set_caption(f"fencebot present - {scenario.name}")
     fonts = Fonts.load()
-    files = image_files(images)
+    files = images if isinstance(images, list) else image_files(images)
     cache: dict[int, pygame.Surface] = {}
     clock = pygame.time.Clock()
     t, acc, tick = 0.0, 0.0, None
@@ -282,9 +293,10 @@ def run_present(scenario: Scenario, config: Config, backend: PlaybackBackend | N
                     acc -= scenario.dt_s
                 if runner.done:
                     stage = DONE
-            if state.index < len(files) and state.index not in cache:
+            shot = image_index(state.index, len(files))
+            if shot is not None and shot not in cache:
                 cache.clear()
-                cache[state.index] = pygame.image.load(str(files[state.index])).convert()
+                cache[shot] = pygame.image.load(str(files[shot])).convert()
             scene = scene_for(state, stage, tick, log.records, config, scenario, plan)
-            draw(screen, layout, fonts, config, state, stage, scene, cache.get(state.index))
+            draw(screen, layout, fonts, config, state, stage, scene, cache.get(shot))
             pygame.display.flip()
