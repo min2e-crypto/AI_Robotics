@@ -7,18 +7,22 @@
   걸린 로봇의 몸체가 다른 구간에 닿거나 자기 구간이 걸린 다른 로봇에 닿는 경우,
   기둥이 순서가 틀린 구간에 걸리는 경우(꼬임). 걸리지 않은 기둥은 그물 아래로 지나간다.
 경로는 전진 Dubins이며, 가장 짧은 것부터 시험해 처음 통과하는 것을 쓴다.
+한 번에 가는 경로가 모두 막히면 경유점 하나를 거치는 두 구간 경로를 찾는다 (ADR-013).
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .config import Config
 from .dubins import DubinsPath, Pose, dubins_paths, sample
 from .net import chain, hook_events
 from .placement import Failure, plan_placement
 from .types import BBox, Role, RobotState, Target, Zone
+
+VIA_GRID_MM = 300  # 경유점 후보 격자 간격
+VIA_HEADINGS = (0.0, math.pi / 2, math.pi, -math.pi / 2)
 
 
 @dataclass(frozen=True)
@@ -31,7 +35,7 @@ class World:
 class Move:
     robot_id: int
     goal: Pose
-    path: DubinsPath
+    paths: tuple[DubinsPath, ...]  # 이어 달리는 구간들. 경유점을 거치면 2개 (ADR-013)
     hooks: tuple[int, ...] = ()  # 이 이동 중 그물에 걸리는 기둥 로봇
 
 
@@ -40,6 +44,7 @@ class Deployment:
     targets: tuple[Target, ...]  # 배치 검사와 경로 계획을 모두 통과했을 때만 채운다
     moves: tuple[Move, ...]      # 실행 순서
     failures: tuple[Failure, ...]
+    warnings: tuple[Failure, ...] = ()  # 완화 모드에서 넘어간 검사 (ADR-014)
 
     @property
     def ok(self) -> bool:
@@ -48,26 +53,37 @@ class Deployment:
 
 def plan_deployment(zone: Zone, vehicles: tuple[BBox, ...], start: tuple[RobotState, ...],
                     config: Config) -> Deployment:
-    placement = plan_placement(zone, config)
-    if not placement.ok:
+    strict = config.planning.strict
+    placement = plan_placement(zone, config, strict)
+    if strict and not placement.ok:
         return Deployment((), (), placement.failures)
+    warnings = list(placement.failures)
+    if not strict:  # 여유 거리와 그물 길이는 보지 않는다
+        config = replace(config, planning=replace(config.planning, clearance_mm=0.0),
+                         net=replace(config.net, length_mm=math.inf))
     world = World(zone.bbox, tuple(vehicles))
     roles = {r.robot_id: r.role.value for r in config.robots}
     poses = {s.robot_id: (s.x, s.y, s.heading) for s in start}
     hooked: set[int] = set()  # 기둥 로봇은 그물과 떨어져 출발한다 (ADR-011)
     moves = []
     for rid, goal in _sequence(placement.targets, config):
-        path, reason, hooks = plan_move(rid, goal, poses, hooked, world, config)
-        if path is None:
-            detail = f"{roles[rid]} -> ({goal[0]:.0f}, {goal[1]:.0f}): {reason}"
-            return Deployment((), (), (Failure("path", detail),))
-        moves.append(Move(rid, goal, path, hooks))
+        paths, reason, hooks = plan_route(rid, goal, poses, hooked, world, config)
+        if paths is None:
+            failure = Failure("path", f"{roles[rid]} -> ({goal[0]:.0f}, {goal[1]:.0f}): {reason}")
+            if strict:
+                return Deployment((), (), (failure,))
+            warnings.append(failure)  # 막혀도 가장 짧은 경로로 보낸다
+            paths = (dubins_paths(poses[rid], goal, config.robot.min_turn_radius_mm)[0],)
+        moves.append(Move(rid, goal, paths, hooks))
         poses[rid] = goal
         hooked |= set(hooks)
     loose = [roles[r.robot_id] for r in config.robots[1:-1] if r.robot_id not in hooked]
     if loose:
-        return Deployment((), (), (Failure("path", f"not hooked: {', '.join(loose)}"),))
-    return Deployment(placement.targets, tuple(moves), ())
+        failure = Failure("path", f"not hooked: {', '.join(loose)}")
+        if strict:
+            return Deployment((), (), (failure,))
+        warnings.append(failure)
+    return Deployment(placement.targets, tuple(moves), (), tuple(warnings))
 
 
 def _sequence(targets: tuple[Target, ...], config: Config) -> list[tuple[int, Pose]]:
@@ -89,6 +105,45 @@ def _sequence(targets: tuple[Target, ...], config: Config) -> list[tuple[int, Po
     advance = [(rid[role], t[role]) for role in line]
     post1 = [(rid[Role.POST1], t[Role.POST1])]
     return stages + reserve + advance + post1
+
+
+def plan_route(robot_id: int, goal: Pose, poses: dict[int, Pose], hooked: set[int], world: World,
+               config: Config) -> tuple[tuple[DubinsPath, ...] | None, str, tuple[int, ...]]:
+    """한 번에 가는 경로를 먼저 찾고, 없으면 경유점 하나를 거치는 가장 짧은 두 구간 경로를 찾는다.
+
+    실패하면 (None, 한 번에 가는 경로가 막힌 이유, ()).
+    """
+    path, reason, hooks = plan_move(robot_id, goal, poses, hooked, world, config)
+    if path is not None:
+        return (path,), "", hooks
+    start = poses[robot_id]
+    vias = [(math.dist(start[:2], v[:2]) + math.dist(v[:2], goal[:2]), v)
+            for v in _via_candidates(config) if not violation(robot_id, v, poses, hooked, world, config)]
+    best, best_len = None, math.inf
+    for bound, via in sorted(vias):
+        if bound >= best_len:
+            break  # 남은 후보는 직선거리만으로도 더 길다
+        first, _, hooks1 = plan_move(robot_id, via, poses, hooked, world, config)
+        if first is None or first.length >= best_len:
+            continue
+        second, _, hooks2 = plan_move(robot_id, goal, {**poses, robot_id: via}, hooked | set(hooks1),
+                                      world, config)
+        if second is not None and first.length + second.length < best_len:
+            best, best_len = ((first, second), "", hooks1 + hooks2), first.length + second.length
+    return best or (None, reason, ())
+
+
+def _via_candidates(config: Config) -> list[Pose]:
+    r, road = config.robot.radius_mm, config.road
+    y_lo = min(a for a, _ in road.lanes.values()) + r
+    y_hi = max(b for _, b in road.lanes.values()) - r
+    xs = _grid(road.x_min_mm + r, road.x_max_mm - r)
+    return [(x, y, h) for x in xs for y in _grid(y_lo, y_hi) for h in VIA_HEADINGS]
+
+
+def _grid(lo: float, hi: float) -> list[float]:
+    n = int((hi - lo) // VIA_GRID_MM)
+    return [lo + k * VIA_GRID_MM for k in range(n + 1)]
 
 
 def plan_move(robot_id: int, goal: Pose, poses: dict[int, Pose], hooked: set[int], world: World,

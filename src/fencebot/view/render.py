@@ -121,6 +121,8 @@ def _hud(surface, scene, tf, config, font, extra):
     ]
     if scene.placement_failures:
         rows[0] += f"   placement FAIL: {', '.join(scene.placement_failures)}"
+    elif scene.placement_warnings:
+        rows[0] += f"   placement WARN: {', '.join(scene.placement_warnings)}"
     elif scene.targets:
         rows[0] += "   placement OK (+ = target, thin line = planned path)"
     alerts = list(scene.flashes)

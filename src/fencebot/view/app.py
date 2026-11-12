@@ -10,6 +10,7 @@ from ..config import Config, config_from_raw
 from ..log import LogWriter, read_log
 from ..runner import Runner
 from ..scenario import Scenario, scenario_from_raw
+from ..playback import PlaybackBackend
 from ..sim import SimBackend
 from .control import ManualControl, Playback
 from .render import render, window_size
@@ -20,6 +21,7 @@ FPS = 60
 
 MANUAL_HELP = ("1-5 select  up/down speed  left/right steer  space stop  "
                "u/h/w reel unwind/hold/wind  c clamp  esc quit")
+DEMO_HELP = "auto deployment (no physics)  esc quit"
 VIEW_HELP = "space pause  left/right seek 1s  +/- speed  esc quit"
 
 
@@ -48,6 +50,26 @@ def run_manual(scenario: Scenario, config: Config, log_path: str | Path) -> None
                 acc -= scenario.dt_s
             scene = build_scene(tick, log.records, config, scenario, plan)
             render(screen, scene, tf, config, font, control.selected, MANUAL_HELP)
+            pygame.display.flip()
+
+
+def run_demo(scenario: Scenario, config: Config, backend: PlaybackBackend, log_path: str | Path) -> None:
+    """전개 계획을 실시간으로 재생한다 (ADR-014). 끝나면 esc를 누를 때까지 마지막 화면을 유지한다."""
+    screen, font, tf = _open(config, f"fencebot demo - {scenario.name}")
+    clock = pygame.time.Clock()
+    plan = deployment_for(config, scenario)
+    with LogWriter(log_path) as log:
+        runner = Runner(scenario, config, backend, log)
+        tick = runner.tick()
+        acc = 0.0
+        while "escape" not in _keys():
+            acc += clock.tick(FPS) / 1000
+            while acc >= scenario.dt_s:
+                if not runner.done:
+                    tick = runner.tick()
+                acc -= scenario.dt_s
+            scene = build_scene(tick, log.records, config, scenario, plan)
+            render(screen, scene, tf, config, font, None, DEMO_HELP)
             pygame.display.flip()
 
 

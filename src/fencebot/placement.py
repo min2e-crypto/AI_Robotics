@@ -24,7 +24,7 @@ class Failure:
 
 @dataclass(frozen=True)
 class Placement:
-    targets: tuple[Target, ...]  # 검사를 통과했을 때만 채운다. 그물 순서
+    targets: tuple[Target, ...]  # 검사를 통과했을 때만 채운다 (strict=False면 항상). 그물 순서
     failures: tuple[Failure, ...]
 
     @property
@@ -32,7 +32,7 @@ class Placement:
         return not self.failures
 
 
-def plan_placement(zone: Zone, config: Config) -> Placement:
+def plan_placement(zone: Zone, config: Config, strict: bool = True) -> Placement:
     shoulder_y, boundary_y = config.road.lanes[SUPPORTED_LANE]
     x_min, _, x_max, _ = zone.bbox
     post2 = (x_min - config.placement.upstream_margin_mm, boundary_y)
@@ -52,7 +52,7 @@ def plan_placement(zone: Zone, config: Config) -> Placement:
     }
     targets = tuple(Target(r.robot_id, *poses[r.role]) for r in config.robots)
     failures = _check(zone, targets, config)
-    return Placement(() if failures else targets, failures)
+    return Placement(() if failures and strict else targets, failures)
 
 
 def _check(zone: Zone, targets: tuple[Target, ...], config: Config) -> tuple[Failure, ...]:

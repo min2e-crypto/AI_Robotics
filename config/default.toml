@@ -33,6 +33,7 @@ watchdog_stop_s = 1.0     # 임시. 최고 속도에서 감속 정지까지 걸�
 clearance_mm = 50         # 임시. 차량·다른 로봇과 띄울 여유 (반지름에 더함)
 step_mm = 20              # 경로 검사 샘플 간격
 stage_gap_mm = 600        # 임시. 경계선 위에 줄 세울 때 로봇 간격
+strict = true             # false면 발표용: 검사 실패를 경고로 돌리고 전개를 계속함 (fencebot demo 기본, ADR-014)
 
 # 사고 형태별 여유 거리 (범위 전체에 더함). 법적 근거 없음, 시연 파라미터
 [margins]

@@ -46,6 +46,7 @@ class Runner:
     def tick(self) -> dict:
         """시각 t의 이벤트 처리 → 위치 기록 → dt 진행. 기록한 tick 레코드를 돌려준다."""
         t, log, backend = self.t, self.log, self.backend
+        self.phase = Phase(getattr(backend, "phase", self.phase))  # 재생 백엔드는 단계를 스스로 안다
         while self._pending and self._pending[0].t <= t + 1e-9:
             e = self._pending.pop(0)
             log.write({"type": "event", "t": e.t, "kind": e.kind, "data": e.data})

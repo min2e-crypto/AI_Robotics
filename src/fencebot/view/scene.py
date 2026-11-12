@@ -45,6 +45,7 @@ class Scene:
     lines: tuple[LaneLine, ...]
     targets: tuple[Target, ...]            # 배치 계산 결과 (검사 실패 시 빈 값)
     placement_failures: tuple[str, ...]    # 실패한 검사 코드 (경로 계획 실패는 path)
+    placement_warnings: tuple[str, ...]    # 완화 모드에서 넘어간 검사 코드 (ADR-014)
     paths: tuple[tuple[int, tuple[tuple[float, float], ...]], ...]  # (robot_id, 계획 경로), 실행 순서
 
     @property
@@ -108,7 +109,8 @@ def build_scene(tick: dict, records: list[dict], config: Config, scenario: Scena
         lines=config.road.lines,
         targets=plan.targets if plan else (),
         placement_failures=tuple(f.code for f in plan.failures) if plan else (),
-        paths=tuple((m.robot_id, tuple((x, y) for x, y, _ in sample(m.path, PATH_STEP_MM)))
+        placement_warnings=tuple(dict.fromkeys(w.code for w in plan.warnings)) if plan else (),
+        paths=tuple((m.robot_id, tuple((x, y) for p in m.paths for x, y, _ in sample(p, PATH_STEP_MM)))
                     for m in plan.moves) if plan else (),
     )
 

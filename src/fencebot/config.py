@@ -56,6 +56,7 @@ class PlanningConfig:
     clearance_mm: float
     step_mm: float
     stage_gap_mm: float
+    strict: bool = True  # False면 발표용: 검사 실패를 경고로 돌리고 전개를 계속한다 (ADR-014)
 
 
 @dataclass(frozen=True)
