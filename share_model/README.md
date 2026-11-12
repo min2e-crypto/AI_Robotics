@@ -12,6 +12,7 @@ share_vision/
 ├─ README.md               ← 지금 이 파일
 ├─ vision.py               ← 세 모델을 한 번에 돌리는 코드
 ├─ vision_config.yaml      ← 모델 경로·기준값
+├─ weights.py              ← 가중치를 GitHub 릴리스에서 받고 올리는 명령
 ├─ 정해둔_규칙.md           ← (참고) 사고 범위 계산에 쓰려고 정해 둔 규칙과 근거
 └─ models/
    ├─ 1_vehicle/  best.pt, yolo26s_coco.pt, README.md
@@ -94,7 +95,29 @@ for v in r["vehicles"]:
 
 실제 CCTV 사고 사진 30장(TAD, 학습에 안 쓴 사진) 시험 결과 (11-12): 사고 차를 위험으로 잡은 사진 6장, 애매로 넘긴 사진 5장, **놓친 사진 19장**. 놓친 원인 대부분이 2번 모델.
 
+## 가중치 받기·올리기 (GitHub Releases)
+
+가중치(`.pt`)는 용량이 커서 저장소에 없다. GitHub 릴리스에 첨부해 두고, 어느 릴리스의 어느 파일을 쓰는지만 `models/weights.json`에 적는다.
+저장소가 공개라서 받는 쪽은 로그인도 초대도 필요 없다.
+
+```bash
+python weights.py fetch     # git pull 한 뒤: weights.json과 다른 가중치만 받아 models/ 아래에 채움
+python weights.py check     # 지금 가진 가중치가 weights.json과 같은지 확인
+```
+
+모델을 새로 학습했을 때 (모델 담당). 저장소 쓰기 권한(협업자 초대)과 GitHub CLI가 필요하다: [cli.github.com](https://cli.github.com)에서 설치하고 `gh auth login`.
+
+```bash
+python weights.py publish models-v2 --dry-run   # 무엇이 올라갈지 먼저 확인
+python weights.py publish models-v2             # 릴리스를 만들어 올리고 weights.json을 고침
+```
+그다음 고쳐진 `models/weights.json`을 커밋해 올린다. `vision.py`나 `vision_config.yaml`도 바뀌었으면 같은 커밋에 넣는다.
+
+- 태그는 `models-v1`, `models-v2`처럼 매번 새로 붙인다. 이미 있는 태그로는 올라가지 않는다.
+- `models/` 아래의 `.pt`가 전부 올라간다. 쓰지 않는 시험용 `.pt`는 올리기 전에 다른 곳으로 옮긴다.
+- 릴리스의 파일 이름은 폴더 이름을 앞에 붙인 것이다 (`2_state/best.pt` → `2_state-best.pt`).
+
 ## 모델 바꾸기
 
-- 새 `best.pt`를 해당 폴더에 덮어쓰거나, `vision_config.yaml`의 경로만 바꾸면 된다. 코드는 그대로.
+- 새 `best.pt`를 해당 폴더에 덮어쓰거나, `vision_config.yaml`의 경로만 바꾸면 된다. 코드는 그대로. 다른 사람도 쓰게 하려면 위의 `publish`로 올린다.
 - 2번 모델을 바꿀 때는 **자르기 방식(`pad` 0.15, 정사각형)과 입력 크기(224)가 학습 때와 같은지** 확인한다.
