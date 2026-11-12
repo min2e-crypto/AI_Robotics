@@ -18,6 +18,11 @@ class DetectionFrame:
     lanes_px: dict[str, tuple[tuple[float, float], ...]]  # 선 이름 → 픽셀 꺾은선 (없으면 빈 dict)
 
 
+def load_frames(directory: str | Path) -> list[DetectionFrame]:
+    """폴더의 frame_*.json을 프레임 번호 순서로 읽는다."""
+    return sorted((load_frame(p) for p in Path(directory).glob("frame_*.json")), key=lambda f: f.frame)
+
+
 def load_frame(path: str | Path) -> DetectionFrame:
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     frame, ts = raw["frame"], raw["timestamp"]

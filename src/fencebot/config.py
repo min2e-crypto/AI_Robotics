@@ -60,6 +60,23 @@ class PlanningConfig:
 
 
 @dataclass(frozen=True)
+class CameraConfig:
+    """영상 픽셀 ↔ 도로 좌표 4점 대응 (ADR-015). 같은 순서의 점끼리 짝이다."""
+
+    image_points_px: tuple[tuple[float, float], ...]
+    road_points_mm: tuple[tuple[float, float], ...]
+
+
+@dataclass(frozen=True)
+class IncidentConfig:
+    min_confidence: float
+    near_mm: float
+    touch_mm: float
+    confirm_frames: int
+    vehicle_size_mm: tuple[float, float]
+
+
+@dataclass(frozen=True)
 class LaneLine:
     name: str
     kind: str
@@ -95,6 +112,8 @@ class Config:
     margins: dict[str, float]
     placement: PlacementConfig
     planning: PlanningConfig
+    camera: CameraConfig
+    incident: IncidentConfig
     road: RoadConfig
     robots: tuple[RobotSpec, ...]
     standby: tuple[RobotState, ...]
@@ -117,6 +136,10 @@ def config_from_raw(raw: dict) -> Config:
         margins=dict(raw["margins"]),
         placement=PlacementConfig(**raw["placement"]),
         planning=PlanningConfig(**raw["planning"]),
+        camera=CameraConfig(*(tuple(tuple(p) for p in raw["camera"][k])
+                              for k in ("image_points_px", "road_points_mm"))),
+        incident=IncidentConfig(**{**raw["incident"],
+                                   "vehicle_size_mm": tuple(raw["incident"]["vehicle_size_mm"])}),
         road=RoadConfig(
             x_min_mm=road["x_min_mm"],
             x_max_mm=road["x_max_mm"],

@@ -23,3 +23,9 @@
 | `lanes_px` | {선 이름: [[x, y], ...]} | 선택. 차선 모델 출력. 선 이름은 `shoulder_line`, `lane_boundary`, `center_line` |
 
 읽는 코드: `fencebot.detection_io.load_frame`
+
+## 연속 프레임 예제
+
+`lane2_basic/`은 `scenarios/lane2_basic.toml`에서 만든 가짜 Detection 10프레임입니다(`uv run fencebot fake scenarios/lane2_basic.toml examples/detections/lane2_basic --frames 10`). 설정 `[camera]`의 임시 카메라(갓길 쪽에서 비스듬히 내려다봄) 기준이라, `frame_000120.json`과는 좌표가 맞지 않습니다.
+
+사고 범위 계산은 차량 박스의 **아랫변**을 바닥 접점으로 씁니다(ADR-015). 박스 아랫변이 차량이 바닥에 닿는 곳에 맞을수록 범위가 정확합니다.

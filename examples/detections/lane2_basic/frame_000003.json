@@ -1,0 +1,48 @@
+{
+  "frame": 3,
+  "timestamp": 0.1,
+  "detections": [
+    {
+      "cls": "car",
+      "confidence": 0.9,
+      "bbox_px": [
+        929.1,
+        433.9,
+        1189.8,
+        639.8
+      ],
+      "track_id": 1
+    },
+    {
+      "cls": "car",
+      "confidence": 0.9,
+      "bbox_px": [
+        1306.0,
+        237.6,
+        1551.4,
+        397.5
+      ],
+      "track_id": 2
+    }
+  ],
+  "vehicle_states": [
+    {
+      "track_id": 1,
+      "label": "damaged",
+      "scores": {
+        "normal": 0.05,
+        "damaged": 0.9,
+        "overturned": 0.05
+      }
+    },
+    {
+      "track_id": 2,
+      "label": "normal",
+      "scores": {
+        "normal": 0.9,
+        "damaged": 0.05,
+        "overturned": 0.05
+      }
+    }
+  ]
+}
