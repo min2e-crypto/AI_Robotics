@@ -6,6 +6,7 @@
     fencebot view logs/run.jsonl                               # 로그 재생 창 (pygame)
     fencebot demo scenarios/lane2_basic.toml [--strict] [--no-window]  # 전개 자동 재생 (발표용)
     fencebot demo scenarios/lane2_basic.toml --detections DIR  # 범위·차량을 Detection에서 계산해 재생
+                                                               # DIR 대신 vision.py의 results.jsonl도 됨
     fencebot zone DIR                                          # Detection 폴더 → 사고 범위 출력
     fencebot fake scenarios/lane2_basic.toml DIR [--frames 30]  # 시나리오로 가짜 Detection 생성
 """
@@ -48,10 +49,10 @@ def main(argv: list[str] | None = None) -> None:
     d.add_argument("scenario")
     d.add_argument("--config")
     d.add_argument("--log")
-    d.add_argument("--detections", help="Detection 폴더. 주면 시나리오의 범위·차량 대신 씀")
+    d.add_argument("--detections", help="Detection 폴더 또는 vision.py의 results.jsonl. 주면 시나리오의 범위·차량 대신 씀")
     d.add_argument("--strict", action="store_true", help="검사를 완화하지 않음")
     d.add_argument("--no-window", action="store_true", help="창 없이 로그만 저장")
-    z = sub.add_parser("zone", help="Detection 폴더에서 사고 범위 계산")
+    z = sub.add_parser("zone", help="Detection 폴더 또는 vision.py의 results.jsonl에서 사고 범위 계산")
     z.add_argument("detections")
     z.add_argument("--config")
     f = sub.add_parser("fake", help="시나리오로 가짜 Detection 생성")

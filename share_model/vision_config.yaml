@@ -1,0 +1,22 @@
+# vision.py 설정. 경로는 이 파일이 있는 폴더 기준.
+# 기준값은 accident_zone(재강 PC)에서 시험한 값과 같다. 바꾸면 결과가 시험 기록과 달라진다.
+
+models:
+  vehicle: models/1_vehicle/best.pt          # 1번 차량 탐지 (VisDrone 학습, 드론 시점). 클래스 'vehicle' 하나
+  coco: models/1_vehicle/yolo26s_coco.pt     # 1번 보조: Ultralytics 기본 COCO 모델 (car/bus/truck). 비스듬한 CCTV 시점 보완. 안 쓰려면 none
+  state: models/2_state/best.pt              # 2번 상태 분류 state_v2 (임시)
+  fire: models/3_fire/best.pt                # 3번 화재 탐지 dfire_v1 (v1/v2 선택 전 임시)
+
+detect:
+  vehicle_conf: 0.25      # 1번 확신도 기준
+  merge_iou: 0.5          # 1번 + COCO 결과에서 같은 차로 볼 IoU
+  merge_inside: 0.8       # 작은 박스의 80% 이상이 큰 박스 안이면 같은 차 (한 차에 박스 2개 나오는 문제)
+  min_size: 24            # 박스 긴 변이 이보다 작으면(px) 분류하지 않고 'uncertain'
+  fire_conf: 0.25         # 3번 확신도 기준 (아직 정식으로 정하지 않음)
+
+state:                    # 2번 판정 규칙
+  pad: 0.15               # 자르기 여백. 학습 때와 반드시 같아야 함
+  imgsz: 224
+  conf: 0.6               # 최고 확률 < conf → uncertain
+  margin: 0.2             # 1등 - 2등 < margin → uncertain
+  risky_sum: 0.3          # 정상이 1등이어도 파손+전복 ≥ 0.3 → uncertain (2번이 위험 차를 정상으로 확신하는 문제 때문)

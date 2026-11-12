@@ -1,7 +1,8 @@
 """사고 범위 계산 (구현_계획 6절, 배치_시뮬레이션_계획 6단계, ADR-015).
 
 프레임별 Detection(픽셀) → 차량의 도로 좌표 박스 → 사고 차량 묶기 → 형태 판정 → 범위(Zone) → 시간 안정화.
-발표용 최소 규칙이다. 멈춘 차량 후보, 애매 판정, 사고 건 선택 화면, 범위 축소 반영은 아직 없다.
+발표용 최소 규칙이다. 멈춘 차량 후보, 사고 건 선택 화면, 범위 축소 반영은 아직 없다.
+묶기와 화재 규칙은 팀원이 시험하며 정한 것(share_model/정해둔_규칙.md)을 따른다 (ADR-016).
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from .scenario import Vehicle
 from .types import BBox, Zone
 
 ACCIDENT_LABELS = ("damaged", "overturned")
-HAZARD_CLASSES = ("fire", "smoke")
+FIRE_CLASS = "fire"  # 연기(smoke)는 오탐이 많아 범위 계산에 쓰지 않는다 (ADR-016)
 SEVERITY = {"damaged": 0, "overturned": 1, "fire": 2}  # 우선순위: 화재 > 전복 > 파손
 
 
@@ -69,35 +70,38 @@ def frame_incident(frame: DetectionFrame, config: Config, h: Matrix | None = Non
         for d in seen if d.cls == "car" and d.track_id is not None
     )
     hazards = tuple(apply(h, ((d.bbox_px[0] + d.bbox_px[2]) / 2, d.bbox_px[3]))
-                    for d in seen if d.cls in HAZARD_CLASSES)
+                    for d in seen if d.cls == FIRE_CLASS)
     return Incident(zone_from_vehicles(vehicles, hazards, config), vehicles)
 
 
 def zone_from_vehicles(vehicles: tuple[Vehicle, ...], hazards: tuple[Point, ...],
                        config: Config) -> Zone | None:
-    """도로 좌표의 차량과 화염·연기 위치에서 사고 범위를 구한다. 사고가 없으면 None.
+    """도로 좌표의 차량과 화염 위치에서 사고 범위를 구한다. 사고가 없으면 None.
 
-    hazards는 화염·연기 박스의 바닥 접점이다. 사고가 여러 건이면 가장 심한 것(같으면 상류 쪽)을 고른다.
+    hazards는 화염 박스의 바닥 접점이다. 사고가 여러 건이면 가장 심한 것(같으면 상류 쪽)을 고른다.
+    - 사고 후보는 파손·전복 차량뿐이다. 정상·애매 차량 옆의 화염만으로는 범위를 만들지 않는다.
+    - 후보끼리 차량 길이 안에 있으면 같은 사고 건이다.
+    - 후보와 맞닿은 차량은 상태와 상관없이 묶되 한 단계만 묶는다 (정체 때 줄줄이 묶이지 않게).
     """
     inc = config.incident
-    burning = {v.track_id for v in vehicles
-               if any(_dist(p, v.bbox) < inc.near_mm for p in hazards)}
+    same_mm = inc.vehicle_size_mm[0]
+    candidates = [v for v in vehicles if v.label in ACCIDENT_LABELS]
+    others = [v for v in vehicles if v.label not in ACCIDENT_LABELS]
     groups = []
-    left = list(vehicles)
-    while left:  # 맞닿은 차량끼리 묶는다
-        group = [left.pop(0)]
+    while candidates:
+        core = [candidates.pop(0)]
         grew = True
         while grew:
             grew = False
-            for v in left[:]:
-                if any(_gap(v.bbox, g.bbox) < inc.touch_mm for g in group):
-                    group.append(v)
-                    left.remove(v)
+            for v in candidates[:]:
+                if any(_gap(v.bbox, g.bbox) < same_mm for g in core):
+                    core.append(v)
+                    candidates.remove(v)
                     grew = True
-        kinds = [v.label for v in group if v.label in ACCIDENT_LABELS]
-        kinds += ["fire"] * any(v.track_id in burning for v in group)
-        if kinds:
-            groups.append((max(kinds, key=SEVERITY.get), group))
+        group = core + [v for v in others if any(_gap(v.bbox, g.bbox) < inc.touch_mm for g in core)]
+        kinds = [v.label for v in core]
+        kinds += ["fire"] * any(_dist(p, v.bbox) < inc.near_mm for p in hazards for v in group)
+        groups.append((max(kinds, key=SEVERITY.get), group))
     if not groups:
         return None
     kind, group = max(groups, key=lambda g: (SEVERITY[g[0]], -min(v.bbox[0] for v in g[1])))

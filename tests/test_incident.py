@@ -49,9 +49,37 @@ def test_kind_priority_fire_over_overturned_over_damaged(cfg):
     assert zone_from_vehicles(cars, (), cfg).kind == "overturned"
     z = zone_from_vehicles(cars, ((5000, 950),), cfg)  # 차량 옆 화염
     assert z.kind == "fire" and z.bbox[0] == pytest.approx(4320 - 800)
-    normal_with_smoke = zone_from_vehicles((Vehicle(1, "normal", CAR),), ((4400, 600),), cfg)
-    assert normal_with_smoke.kind == "fire"
-    assert zone_from_vehicles((Vehicle(1, "normal", CAR),), ((8000, 2000),), cfg) is None  # 먼 연기
+    assert zone_from_vehicles(cars, ((8000, 2000),), cfg).kind == "overturned"  # 먼 화염
+
+
+def test_fire_beside_normal_or_uncertain_vehicle_makes_no_zone(cfg):
+    """전조등·후미등을 불로 잡는 오탐 때문에, 사고 차량 없는 화염은 범위를 만들지 않는다 (ADR-016)."""
+    for label in ("normal", "uncertain"):
+        assert zone_from_vehicles((Vehicle(1, label, CAR),), ((4400, 600),), cfg) is None
+
+
+def test_smoke_is_not_used(cfg, scenario):
+    frame = fake_frames(scenario, cfg, count=1, noise_px=0.0)[0]
+    car = next(d for d in frame.detections if d.track_id == 1)
+    smoke = replace(car, cls="smoke", track_id=None)
+    assert frame_incident(replace(frame, detections=frame.detections + (smoke,)), cfg).zone.kind == "damaged"
+    fire = replace(smoke, cls="fire")
+    assert frame_incident(replace(frame, detections=frame.detections + (fire,)), cfg).zone.kind == "fire"
+
+
+def test_touching_vehicles_join_one_step_only(cfg):
+    """사고 차량 뒤로 차가 줄지어 맞닿아 있어도 바로 맞닿은 한 대만 묶는다 (ADR-016)."""
+    first = Vehicle(2, "normal", (5980, 300, 7540, 920))    # 사고 차량 100mm 뒤
+    second = Vehicle(3, "normal", (7640, 300, 9200, 920))   # 그 100mm 뒤
+    z = zone_from_vehicles((Vehicle(1, "damaged", CAR), first, second), (), cfg)
+    assert z.bbox[2] == pytest.approx(7840)
+
+
+def test_accident_vehicles_within_car_length_are_one_incident(cfg):
+    a = Vehicle(1, "damaged", CAR)
+    b = Vehicle(2, "overturned", (6880, 274, 8440, 894))    # 1000mm 뒤 (차량 길이 1560 안)
+    z = zone_from_vehicles((a, b), (), cfg)
+    assert z.kind == "overturned" and z.bbox[0] == pytest.approx(4320 - 500) and z.bbox[2] == pytest.approx(8940)
 
 
 def test_separate_accidents_pick_most_severe(cfg):
