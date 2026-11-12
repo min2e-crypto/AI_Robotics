@@ -1,0 +1,10 @@
+{
+  "repo": "min2e-crypto/AI_Robotics",
+  "release": "models-v1",
+  "files": {
+    "1_vehicle/best.pt": "e93c7c8ee8ad21d1426118c5a73714514d33fbb2ba590a79735fc699ecf1a97a",
+    "1_vehicle/yolo26s_coco.pt": "646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b",
+    "2_state/best.pt": "16157c628f498ee0cbdb2499431137fca06ad05b64763415f933947b943eb5f8",
+    "3_fire/best.pt": "ad9dbd29775e74122654289f01cf2dfb6dd3a90b00561b5b66ffe6f1909ddc00"
+  }
+}
