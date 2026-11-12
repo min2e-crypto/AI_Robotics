@@ -33,7 +33,9 @@ def window_size(tf: ScreenTransform) -> tuple[int, int]:
 
 
 def render(surface: pygame.Surface, scene: Scene, tf: ScreenTransform, config: Config,
-           font: pygame.font.Font, selected: int | None = None, extra: str = "") -> None:
+           font: pygame.font.Font | None, selected: int | None = None, extra: str = "",
+           hud: bool = True) -> None:
+    """hud=False면 도로 그림만 그린다 (발표 화면은 정보 패널을 따로 둔다)."""
     surface.fill(BG)
     _road(surface, scene, tf, config)
     _zone_and_vehicles(surface, scene, tf)
@@ -41,7 +43,8 @@ def render(surface: pygame.Surface, scene: Scene, tf: ScreenTransform, config: C
     _targets(surface, scene, tf, config)
     _net(surface, scene, tf, config)
     _robots(surface, scene, tf, config, selected)
-    _hud(surface, scene, tf, config, font, extra)
+    if hud:
+        _hud(surface, scene, tf, config, font, extra)
 
 
 def _road(surface, scene, tf, config):

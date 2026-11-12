@@ -133,6 +133,11 @@ class ZoneTracker:
         self._pending: Zone | None = None
         self.zone: Zone | None = None
 
+    @property
+    def progress(self) -> tuple[int, int]:
+        """(범위가 연속으로 나온 프레임 수, 확정에 필요한 수). 확정 뒤에는 둘이 같다."""
+        return (self._need if self.zone is not None else self._streak), self._need
+
     def update(self, incident: Incident) -> Zone | None:
         z = incident.zone
         if self.zone is not None:
